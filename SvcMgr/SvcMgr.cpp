@@ -30,10 +30,12 @@ DEFINE_GUID(MainGuid, 0x9d7c95fa, 0xe67f, 0x41fd, 0x8a, 0xf2, 0xb6, 0x21, 0x4e, 
 DEFINE_GUID(MenuGuid, 0xa82e0a2a, 0x63fd, 0x4e2b, 0xa6, 0x41, 0xa4, 0x13, 0x66, 0xa3, 0xa6, 0xcd);
 
 // {5DBACF9B-62B5-4E62-89B9-5EB40944BE86}
-DEFINE_GUID(MsgCantStartService, 0x5dbacf9b, 0x62b5, 0x4e62, 0x89, 0xb9, 0x5e, 0xb4, 0x9, 0x44, 0xbe, 0x86);
+DEFINE_GUID(MsgCantStartServiceGuid, 0x5dbacf9b, 0x62b5, 0x4e62, 0x89, 0xb9, 0x5e, 0xb4, 0x9, 0x44, 0xbe, 0x86);
 // {75996F83-B676-45E7-A7E3-67F028F97EB0}
-DEFINE_GUID(MsgCantStopService, 0x75996f83, 0xb676, 0x45e7, 0xa7, 0xe3, 0x67, 0xf0, 0x28, 0xf9, 0x7e, 0xb0);
+DEFINE_GUID(MsgCantStopServiceGuid, 0x75996f83, 0xb676, 0x45e7, 0xa7, 0xe3, 0x67, 0xf0, 0x28, 0xf9, 0x7e, 0xb0);
 
+// {F288D1AA-0E26-4A2E-8056-F67D1F0D8B60}
+DEFINE_GUID(SelectComputerGuid, 0xf288d1aa, 0xe26, 0x4a2e, 0x80, 0x56, 0xf6, 0x7d, 0x1f, 0xd, 0x8b, 0x60);
 
 
 struct PluginStartupInfo Info;
@@ -50,20 +52,65 @@ const wchar_t *GetMsg(int MsgId)
 
 void WINAPI GetGlobalInfoW(struct GlobalInfo *gi)
 {
-  gi->StructSize=sizeof(gi);
-  gi->MinFarVersion=FARMANAGERVERSION;
-  gi->Version=MAKEFARVERSION(0,1,1,1,VS_RELEASE);
-  gi->Guid=MainGuid;
-  gi->Title=L"SvcMgr";
-  gi->Description=L"Service manager plugin";
-  gi->Author=L"TeaTeam";
+  gi->StructSize    = sizeof(gi);
+  gi->MinFarVersion = FARMANAGERVERSION;
+  gi->Version       = MAKEFARVERSION(0,1,1,1,VS_RELEASE);
+  gi->Guid          = MainGuid;
+  gi->Title         = L"SvcMgr";
+  gi->Description   = L"Service manager plugin";
+  gi->Author        = L"TeaTeam";
 }
+
+HANDLE g_hSettings = INVALID_HANDLE_VALUE;
+Settings g_Settings;
+
+void ReadSettings()
+{
+  FarSettingsCreate FSC = {sizeof(FSC), MainGuid, INVALID_HANDLE_VALUE};
+  BOOL bCreate = Info.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, PSL_LOCAL, &FSC);
+  if (bCreate)
+  {
+    g_hSettings = FSC.Handle;
+
+    FarSettingsItem FSI;
+    FSI.Root = 0;
+    FSI.Name = L"Computer";
+    FSI.Type = FST_STRING;
+    FSI.String = g_Settings.sComputer.c_str();
+    BOOL bGet = Info.SettingsControl(g_hSettings, SCTL_GET, 0, &FSI);
+    if (bGet && FSI.Type == FST_STRING)
+    {
+      g_Settings.sComputer = FSI.String ? FSI.String : L"";
+    }
+  }
+}
+
+void SaveSettings()
+{
+  FarSettingsItem FSI;
+  FSI.Root = 0;
+  FSI.Name = L"Computer";
+  FSI.Type = FST_STRING;
+  FSI.String = g_Settings.sComputer.c_str();
+  BOOL bSet = Info.SettingsControl(g_hSettings, SCTL_SET, 0, &FSI);
+
+  BOOL bFree = Info.SettingsControl(g_hSettings, SCTL_FREE, 0, NULL);
+  g_hSettings = INVALID_HANDLE_VALUE;
+}
+
 
 void WINAPI SetStartupInfoW(const struct PluginStartupInfo *psi)
 {
   Info=*psi;
   FSF=*psi->FSF;
   Info.FSF=&FSF;
+
+  ReadSettings();
+}
+
+void WINAPI ExitFARW(const struct ExitInfo *Info)
+{
+  SaveSettings();
 }
 
 HANDLE WINAPI OpenW(const struct OpenInfo *oi)
@@ -74,6 +121,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *oi)
 
 void WINAPI ClosePanelW(const struct ClosePanelInfo *cpi)
 {
+  SaveSettings();
   CServiceManager* sm=(CServiceManager*)cpi->hPanel;
   delete sm;
 }
@@ -387,6 +435,33 @@ BOOL ViewServiceInfo(CServiceManager* sm)
   return TRUE;
 }
 
+bool SelectComputer(CServiceManager* sm)
+{
+  size_t nLen = 255;
+  wchar_t* pBuf = new wchar_t[nLen + 1];
+  wcscpy_s(pBuf, nLen, g_Settings.sComputer.c_str());
+  
+  bool bGet = Info.InputBox(
+    &MainGuid, 
+    &SelectComputerGuid, 
+    L"Select Computer", 
+    L"&Computer (empty for local system):", 
+    L"Computer", 
+    pBuf, 
+    pBuf, 
+    nLen,
+    NULL,
+    FIB_ENABLEEMPTY | FIB_NOAMPERSAND);
+
+  if (bGet)
+  {
+    g_Settings.sComputer = pBuf ? pBuf : L"";
+  }
+
+  delete[] pBuf;
+  return TRUE;
+}
+
 BOOL StartService(CServiceManager* sm)
 {
   PanelInfo pi;
@@ -414,7 +489,7 @@ BOOL StartService(CServiceManager* sm)
             Info.PanelControl(PANEL_ACTIVE, FCTL_REDRAWPANEL, 0, NULL);
           else
           {
-            Info.Message(&MainGuid, &MsgCantStartService,
+            Info.Message(&MainGuid, &MsgCantStartServiceGuid,
               FMSG_ERRORTYPE|FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK,
               NULL,
               (const wchar_t * const *)L"Error",
@@ -455,7 +530,7 @@ BOOL StopService(CServiceManager* sm)
             Info.PanelControl(PANEL_ACTIVE, FCTL_REDRAWPANEL, 0, NULL);
           else
           {
-            Info.Message(&MainGuid, &MsgCantStopService,
+            Info.Message(&MainGuid, &MsgCantStopServiceGuid,
               FMSG_ERRORTYPE|FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK,
               NULL,
               (const wchar_t * const *)L"Error",
@@ -483,8 +558,11 @@ int WINAPI ProcessPanelInputW(const struct ProcessPanelInputInfo *info)
     return ViewServiceInfo(sm);
   else if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F5)
     return StartService(sm);
+  else if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F6)
+    return SelectComputer(sm);
   else if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F8)
     return StopService(sm);
 
   return FALSE;
 }
+

@@ -2,6 +2,7 @@ EXPORTS
    GetPluginInfoW
    OpenW
    SetStartupInfoW
+   ExitFARW
    ClosePanelW
    GetFindDataW
    GetOpenPanelInfoW
