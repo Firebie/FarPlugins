@@ -389,12 +389,19 @@ void CServiceList::Clear(void)
   iServiceCount = 0;
 }
 
-CServiceList::CServiceList(const std::wstring& aRemoteMachine)
-  : iSCManager(NULL),
+CServiceList::CServiceList(const wstring& aRemoteMachine)
+  : iRemoteMachine(aRemoteMachine),
+  iSCManager(NULL),
   iServiceCount(0)
 {
+}
+
+bool CServiceList::Init()
+{
   iSCManager = OpenSCManager(
-    aRemoteMachine.c_str(), SERVICES_ACTIVE_DATABASE, SC_MANAGER_ALL_ACCESS);
+    iRemoteMachine.c_str(), SERVICES_ACTIVE_DATABASE, SC_MANAGER_ALL_ACCESS);
+
+  return iSCManager != NULL;
 }
 
 CServiceList::~CServiceList()

@@ -24,15 +24,19 @@
 #include "SvcMgr.h"
 
 // {9D7C95FA-E67F-41FD-8AF2-B6214EAC9F01}
-DEFINE_GUID(MainGuid, 0x9d7c95fa, 0xe67f, 0x41fd, 0x8a, 0xf2, 0xb6, 0x21, 0x4e, 0xac, 0x9f, 0x1);
+DEFINE_GUID(PluginGuid, 0x9d7c95fa, 0xe67f, 0x41fd, 0x8a, 0xf2, 0xb6, 0x21, 0x4e, 0xac, 0x9f, 0x1);
 
 // {A82E0A2A-63FD-4E2B-A641-A41366A3A6CD}
 DEFINE_GUID(MenuGuid, 0xa82e0a2a, 0x63fd, 0x4e2b, 0xa6, 0x41, 0xa4, 0x13, 0x66, 0xa3, 0xa6, 0xcd);
 
 // {5DBACF9B-62B5-4E62-89B9-5EB40944BE86}
 DEFINE_GUID(MsgCantStartServiceGuid, 0x5dbacf9b, 0x62b5, 0x4e62, 0x89, 0xb9, 0x5e, 0xb4, 0x9, 0x44, 0xbe, 0x86);
+
 // {75996F83-B676-45E7-A7E3-67F028F97EB0}
 DEFINE_GUID(MsgCantStopServiceGuid, 0x75996f83, 0xb676, 0x45e7, 0xa7, 0xe3, 0x67, 0xf0, 0x28, 0xf9, 0x7e, 0xb0);
+
+// {754C7779-F44A-4789-B21B-FB7CE34DE8C1}
+DEFINE_GUID(CantConnectToMachineMsgGuid, 0x754c7779, 0xf44a, 0x4789, 0xb2, 0x1b, 0xfb, 0x7c, 0xe3, 0x4d, 0xe8, 0xc1);
 
 // {F288D1AA-0E26-4A2E-8056-F67D1F0D8B60}
 DEFINE_GUID(SelectComputerGuid, 0xf288d1aa, 0xe26, 0x4a2e, 0x80, 0x56, 0xf6, 0x7d, 0x1f, 0xd, 0x8b, 0x60);
@@ -47,7 +51,7 @@ const wchar_t ServicesDirName[] = L"Services";
 
 const wchar_t *GetMsg(int MsgId)
 {
-  return Info.GetMsg(&MainGuid,MsgId);
+  return Info.GetMsg(&PluginGuid,MsgId);
 }
 
 void WINAPI GetGlobalInfoW(struct GlobalInfo *gi)
@@ -55,7 +59,7 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *gi)
   gi->StructSize    = sizeof(gi);
   gi->MinFarVersion = FARMANAGERVERSION;
   gi->Version       = MAKEFARVERSION(0,1,1,1,VS_RELEASE);
-  gi->Guid          = MainGuid;
+  gi->Guid          = PluginGuid;
   gi->Title         = L"SvcMgr";
   gi->Description   = L"Service manager plugin";
   gi->Author        = L"TeaTeam";
@@ -66,7 +70,7 @@ Settings g_Settings;
 
 void ReadSettings()
 {
-  FarSettingsCreate FSC = {sizeof(FSC), MainGuid, INVALID_HANDLE_VALUE};
+  FarSettingsCreate FSC = {sizeof(FSC), PluginGuid, INVALID_HANDLE_VALUE};
   BOOL bCreate = Info.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, PSL_LOCAL, &FSC);
   if (bCreate)
   {
@@ -115,7 +119,16 @@ void WINAPI ExitFARW(const struct ExitInfo *Info)
 
 HANDLE WINAPI OpenW(const struct OpenInfo *oi)
 {
-  CServiceManager* sm = new CServiceManager();
+  CServiceManager* sm = new CServiceManager(g_Settings.sComputer);
+  bool bInit = sm->Init();
+  if (!bInit)
+  {
+    Info.Message(&PluginGuid, &CantConnectToMachineMsgGuid,
+      FMSG_ERRORTYPE|FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK,
+      NULL,
+      (const wchar_t * const *)L"Error",
+      0,0);
+  }
   return (HANDLE)sm;
 }
 
@@ -138,6 +151,26 @@ void WINAPI GetPluginInfoW(struct PluginInfo *pi)
   pi->PluginMenu.Count=ArraySize(MenuStrings);
 }
 
+wstring GetComputerName()
+{
+  wstring sName;
+  DWORD nSize = 0;
+  BOOL bGet = GetComputerName(NULL, &nSize);
+  if (!bGet && GetLastError() == ERROR_BUFFER_OVERFLOW)
+  {
+    wchar_t* pBuf = new wchar_t[nSize];
+    bGet = GetComputerName(pBuf, &nSize);
+    if (bGet)
+    {
+      sName = pBuf ? pBuf : L"";
+    }
+    delete[] pBuf;
+    pBuf = NULL;
+  }
+
+  return sName;
+}
+
 void WINAPI GetOpenPanelInfoW(struct OpenPanelInfo *opi)
 {
   static wchar_t PanelTitle[50];
@@ -150,7 +183,17 @@ void WINAPI GetOpenPanelInfoW(struct OpenPanelInfo *opi)
   else if(sm->GetType()==SERVICE_DRIVER)
     opi->CurDir=DriversDirName;
 
-  FSF.snprintf(PanelTitle,ArraySize(PanelTitle)-1,L"%s%s%s",PluginName,opi->CurDir?L": ":L"",opi->CurDir?opi->CurDir:L"");
+  wstring sComputer;
+  if (g_Settings.sComputer.length() > 0)
+    sComputer = g_Settings.sComputer;
+  else
+    sComputer = GetComputerName();
+
+  FSF.snprintf(
+    PanelTitle,
+    ArraySize(PanelTitle)-1,
+    L"%s%s%s",sComputer.c_str(),opi->CurDir?L": ":L"",opi->CurDir?opi->CurDir:L"");
+
   opi->PanelTitle=PanelTitle;
 
   static PanelMode PanelModesArray[10];
@@ -282,7 +325,7 @@ int WINAPI SetDirectoryW(const struct SetDirectoryInfo *sdi)
   if (sdi->OpMode & OPM_FIND)
     return FALSE;
 
-  CServiceManager* sm=(CServiceManager*)sdi->hPanel;
+  CServiceManager* sm = (CServiceManager*)sdi->hPanel;
 
   if (!wcscmp(sdi->Dir,L"\\") || !wcscmp(sdi->Dir,L".."))
   {
@@ -442,7 +485,7 @@ bool SelectComputer(CServiceManager* sm)
   wcscpy_s(pBuf, nLen, g_Settings.sComputer.c_str());
   
   bool bGet = Info.InputBox(
-    &MainGuid, 
+    &PluginGuid, 
     &SelectComputerGuid, 
     L"Select Computer", 
     L"&Computer (empty for local system):", 
@@ -455,7 +498,14 @@ bool SelectComputer(CServiceManager* sm)
 
   if (bGet)
   {
-    g_Settings.sComputer = pBuf ? pBuf : L"";
+    wstring sComputer = pBuf ? pBuf : L"";
+    if (FSF.LStricmp(sComputer.c_str(), g_Settings.sComputer.c_str()) != 0)
+    {
+      g_Settings.sComputer = sComputer;
+
+      FarPanelDirectory FPD = {sizeof(FPD), PluginPrefix, NULL, PluginGuid, L".."};
+      bool bSet = Info.PanelControl(PANEL_ACTIVE, FCTL_SETPANELDIRECTORY, 0, &FPD);
+    }
   }
 
   delete[] pBuf;
@@ -489,7 +539,7 @@ BOOL StartService(CServiceManager* sm)
             Info.PanelControl(PANEL_ACTIVE, FCTL_REDRAWPANEL, 0, NULL);
           else
           {
-            Info.Message(&MainGuid, &MsgCantStartServiceGuid,
+            Info.Message(&PluginGuid, &MsgCantStartServiceGuid,
               FMSG_ERRORTYPE|FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK,
               NULL,
               (const wchar_t * const *)L"Error",
@@ -530,7 +580,7 @@ BOOL StopService(CServiceManager* sm)
             Info.PanelControl(PANEL_ACTIVE, FCTL_REDRAWPANEL, 0, NULL);
           else
           {
-            Info.Message(&MainGuid, &MsgCantStopServiceGuid,
+            Info.Message(&PluginGuid, &MsgCantStopServiceGuid,
               FMSG_ERRORTYPE|FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK,
               NULL,
               (const wchar_t * const *)L"Error",

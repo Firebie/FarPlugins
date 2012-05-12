@@ -75,6 +75,7 @@ public:
 class CServiceList
 {
 private:
+  wstring iRemoteMachine;
   SC_HANDLE iSCManager;
   DWORD iServiceCount;
   std::vector<CServiceInfo> iServicesInfo;
@@ -83,6 +84,9 @@ private:
 public:
   CServiceList(const std::wstring& aRemoteMachine=L"");
   ~CServiceList();
+  
+  bool Init();
+
 public:
   bool ManagerStatus(void) const { return iSCManager != NULL; }
   bool Fill(DWORD aServiceType);
@@ -102,10 +106,15 @@ class CServiceManager
     CServiceList iServiceList;
     DWORD iServiceType;
   public:
-    CServiceManager(const std::wstring& aRemoteMachine = L"")
+    CServiceManager(const wstring& aRemoteMachine = L"")
       : iServiceList(aRemoteMachine),
       iServiceType(0) 
     {}
+
+    bool Init()
+    {
+      return iServiceList.Init();
+    }
 
     bool ManagerStatus() const { return iServiceList.ManagerStatus(); }
     void Reset(DWORD aServiceType=0) { iServiceType = aServiceType; Clear(); }
