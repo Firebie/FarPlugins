@@ -362,19 +362,20 @@ BOOL ViewServiceInfo(CServiceManager* sm)
 
           if (bWrite)
           {
-            Info.Editor(
-              sFileName.c_str(), 
-              rServiceInfo.iDisplayName.c_str(), 
-              0, 0, -1, -1, 
-              EF_DELETEONLYFILEONCLOSE | EF_ENABLE_F6 | EF_DISABLESAVEPOS,
-              1, 1,
-              CP_DEFAULT);
-            //Info.Viewer(
+            //Info.Editor(
             //  sFileName.c_str(), 
-            //  NULL, 
+            //  rServiceInfo.iDisplayName.c_str(), 
             //  0, 0, -1, -1, 
-            //  VF_DELETEONLYFILEONCLOSE | VF_DISABLEHISTORY | VF_ENABLE_F6,
+            //  EF_DELETEONLYFILEONCLOSE | EF_DISABLEHISTORY | EF_DISABLESAVEPOS | EF_ENABLE_F6,
+            //  1, 1,
             //  CP_DEFAULT);
+
+            Info.Viewer(
+              sFileName.c_str(), 
+              rServiceInfo.iDisplayName.c_str(),
+              0, 0, -1, -1, 
+              VF_DELETEONLYFILEONCLOSE | VF_DISABLEHISTORY | VF_ENABLE_F6,
+              CP_DEFAULT);
           }
         }
       }
