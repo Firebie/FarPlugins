@@ -46,6 +46,7 @@ public:
   DWORD iStartType;
   DWORD iErrorControl;
   DWORD iTagId;
+  wstring iServiceStartName;
   SERVICE_STATUS_PROCESS iServiceStatusProcess;
 
   wstring GetServiceTypeS();
@@ -65,6 +66,7 @@ public:
     DWORD aStartType,
     DWORD aErrorControl,
     DWORD aTagId,
+    const wstring& aServiceStartName,
     SERVICE_STATUS_PROCESS aServiceStatusProcess);
 
     SServiceInfo Data() const;

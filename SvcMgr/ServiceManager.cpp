@@ -18,6 +18,8 @@
 
 #include "stdafx.h"
 
+#include "SvcMgr.h"
+
 #include "ServiceManager.hpp"
 
 typedef BOOL (WINAPI * TQueryServiceConfig2W) (
@@ -38,6 +40,7 @@ CServiceInfo::CServiceInfo(
   DWORD aStartType,
   DWORD aErrorControl,
   DWORD aTagId,
+  const wstring& aServiceStartName,
   SERVICE_STATUS_PROCESS aServiceStatusProcess)
   : iServiceName(aServiceName),
   iDisplayName(aDisplayName),
@@ -48,6 +51,7 @@ CServiceInfo::CServiceInfo(
   iStartType(aStartType),
   iErrorControl(aErrorControl),
   iTagId(aTagId),
+  iServiceStartName(aServiceStartName),
   iServiceStatusProcess(aServiceStatusProcess)
 {
 }
@@ -164,7 +168,34 @@ wstring CServiceInfo::GetFullInfo()
   sInfo += L"Start type:             " + GetStartTypeS() + L"\n";
   sInfo += L"Status:                 " + GetCurrentStateS() + L"\n\n";
   sInfo += L"Error Control type:     " + GetErrorControlTypeS() + L"\n\n";
+  sInfo += L"Log on as:              " + iServiceStartName + L"\n\n";
+
+  if (iDependencies.empty())
+  {
+    sInfo += L"Depends on:             \n\n";
+  }
+  else
+  {
+    for (vector<wstring>::iterator it = iDependencies.begin();
+      it != iDependencies.end();
+      ++it)
+    {
+      if (it == iDependencies.begin())
+        sInfo += L"Depends on:             " + *it + L"\n";
+      else
+        sInfo += L"                        " + *it + L"\n";
+    }
+    sInfo += L"\n";
+  }
+
+  int nPathSize = iPath.length() + 1 + 2;
+  wchar_t* pBuf = new wchar_t[nPathSize];
+  wcscpy_s(pBuf, nPathSize, iPath.c_str());
+  wstring sPath = FSF.QuoteSpaceOnly(pBuf);
+  delete[] pBuf;
+  pBuf = NULL;
   
+  sInfo += L"Binary Path:            " + sPath + L"\n";
 
   return sInfo;
 }
@@ -274,7 +305,7 @@ bool CServiceList::Fill(DWORD aServiceType)
           serviceConfigData = new char[needed];
           QUERY_SERVICE_CONFIG* serviceConfig = (QUERY_SERVICE_CONFIG*)serviceConfigData;
           
-          if (!QueryServiceConfig(handle,serviceConfig,needed,&needed)) 
+          if (!QueryServiceConfig(handle, serviceConfig, needed, &needed)) 
             throw std::exception();
 
           std::wstring sDescription;
@@ -311,6 +342,7 @@ bool CServiceList::Fill(DWORD aServiceType)
             serviceConfig->dwStartType,
             serviceConfig->dwErrorControl,
             serviceConfig->dwTagId,
+            serviceConfig->lpServiceStartName ? serviceConfig->lpServiceStartName : L"",
             pServices[nService].ServiceStatusProcess);
 
           iServicesInfo.push_back(si);

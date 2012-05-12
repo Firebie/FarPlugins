@@ -156,6 +156,7 @@
   <ItemGroup>
     <ClInclude Include="ServiceManager.hpp" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="SvcMgr.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>

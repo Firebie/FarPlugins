@@ -21,6 +21,8 @@
 
 #include "ServiceManager.hpp"
 
+#include "SvcMgr.h"
+
 // {9D7C95FA-E67F-41FD-8AF2-B6214EAC9F01}
 DEFINE_GUID(MainGuid, 0x9d7c95fa, 0xe67f, 0x41fd, 0x8a, 0xf2, 0xb6, 0x21, 0x4e, 0xac, 0x9f, 0x1);
 
