@@ -20,6 +20,8 @@
 #include "stdafx.h"
 
 #include "ServiceManager.hpp"
+#include "DlgBuilder.hpp"
+#include "SvcMgrLng.h"
 
 #include "SvcMgr.h"
 
@@ -41,6 +43,9 @@ DEFINE_GUID(CantConnectToMachineMsgGuid, 0x754c7779, 0xf44a, 0x4789, 0xb2, 0x1b,
 // {F288D1AA-0E26-4A2E-8056-F67D1F0D8B60}
 DEFINE_GUID(SelectComputerGuid, 0xf288d1aa, 0xe26, 0x4a2e, 0x80, 0x56, 0xf6, 0x7d, 0x1f, 0xd, 0x8b, 0x60);
 
+// {603B5E18-BA59-4A44-8AFC-D6D4754176D7}
+DEFINE_GUID(EditServiceDlgGuid, 0x603b5e18, 0xba59, 0x4a44, 0x8a, 0xfc, 0xd6, 0xd4, 0x75, 0x41, 0x76, 0xd7);
+
 
 struct PluginStartupInfo Info;
 FARSTANDARDFUNCTIONS FSF;
@@ -51,7 +56,7 @@ const wchar_t ServicesDirName[] = L"Services";
 
 const wchar_t *GetMsg(int MsgId)
 {
-  return Info.GetMsg(&PluginGuid,MsgId);
+  return Info.GetMsg(&PluginGuid, MsgId);
 }
 
 void WINAPI GetGlobalInfoW(struct GlobalInfo *gi)
@@ -105,9 +110,9 @@ void SaveSettings()
 
 void WINAPI SetStartupInfoW(const struct PluginStartupInfo *psi)
 {
-  Info=*psi;
-  FSF=*psi->FSF;
-  Info.FSF=&FSF;
+  Info     = *psi;
+  FSF      = *psi->FSF;
+  Info.FSF = &FSF;
 
   ReadSettings();
 }
@@ -478,6 +483,75 @@ BOOL ViewServiceInfo(CServiceManager* sm)
   return TRUE;
 }
 
+BOOL EditService(CServiceManager* sm)
+{
+  PanelInfo pi;
+  ZeroMemory(&pi, sizeof(PanelInfo));
+  pi.StructSize = sizeof(PanelInfo);
+  if (Info.PanelControl(PANEL_ACTIVE, FCTL_GETPANELINFO, 0, &pi))
+  {
+    size_t CurItem = pi.CurrentItem;
+    if (CurItem > 0)
+    {
+      size_t Size = Info.PanelControl(PANEL_ACTIVE, FCTL_GETPANELITEM, CurItem, 0);
+      PluginPanelItem *PPI=(PluginPanelItem*)malloc(Size);
+      if (PPI)
+      {
+        FarGetPluginPanelItem FGPPI = {Size, PPI};
+        Info.PanelControl(PANEL_ACTIVE, FCTL_GETPANELITEM, CurItem, &FGPPI);
+
+        size_t Index = FGPPI.Item->UserData;
+        free(PPI);
+
+        if (Index < sm->GetCount())
+        {
+          if (sm->GetType() == 0)
+            return TRUE;
+
+          CServiceInfo& rServiceInfo = sm->GetServiceInfo(Index);
+
+          PluginDialogBuilder Dlg(Info, PluginGuid, EditServiceDlgGuid, L"Service Properties", NULL);
+          wstring sService = L"Service: " + rServiceInfo.iDisplayName;
+          
+          Dlg.AddEmptyLine();
+          Dlg.AddText(sService.c_str());
+          
+          int nStartType = rServiceInfo.iStartType;
+          int nStartTypeCount = 0;
+
+          int nStartTypeMessages[] = {MBoot, MSystem, MAutomatic, MManual, MDisabled};
+          int* pStartTypeMessages = NULL;
+
+          if (sm->GetType()==SERVICE_WIN32)
+          {
+            nStartTypeCount = 3;
+            nStartType -= 2;
+            pStartTypeMessages = nStartTypeMessages + 2;
+          }
+          else if (sm->GetType()==SERVICE_DRIVER)
+          {
+            nStartTypeCount = 5;
+            pStartTypeMessages = nStartTypeMessages;
+          }
+          
+          
+          Dlg.AddEmptyLine();
+          Dlg.AddText(MStartupType);
+          Dlg.AddRadioButtons(&nStartType, nStartTypeCount, pStartTypeMessages, true);
+
+          Dlg.AddOKCancel(MButtonOk, MButtonCancel);
+          if (Dlg.ShowDialog())
+          {
+            int a = 10;
+          }
+        }
+      }
+    }
+  }
+
+  return TRUE;
+}
+
 bool SelectComputer(CServiceManager* sm)
 {
   size_t nLen = 255;
@@ -606,6 +680,8 @@ int WINAPI ProcessPanelInputW(const struct ProcessPanelInputInfo *info)
 
   if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F3)
     return ViewServiceInfo(sm);
+  if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F4)
+    return EditService(sm);
   else if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F5)
     return StartService(sm);
   else if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F6)

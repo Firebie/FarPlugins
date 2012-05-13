@@ -81,20 +81,20 @@ wstring CServiceInfo::GetStartTypeS()
   
   switch (iStartType)
   {
-  case SERVICE_AUTO_START:
-    sStartType = L"Auto";
-    break;
   case SERVICE_BOOT_START:
     sStartType = L"Boot";
+    break;
+  case SERVICE_SYSTEM_START:
+    sStartType = L"System";
+    break;
+  case SERVICE_AUTO_START:
+    sStartType = L"Auto";
     break;
   case SERVICE_DEMAND_START:
     sStartType = L"Manual";
     break;
   case SERVICE_DISABLED:
     sStartType = L"Disabled";
-    break;
-  case SERVICE_SYSTEM_START:
-    sStartType = L"System";
     break;
   }
 
