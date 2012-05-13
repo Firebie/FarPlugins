@@ -98,6 +98,7 @@ public:
 
   bool StartService(size_t anIndex);
   bool StopService(size_t anIndex);
+  bool SetServiceStartupType(size_t anIndex, DWORD anStartType);
 };
 
 class CServiceManager
@@ -119,8 +120,9 @@ class CServiceManager
     bool ManagerStatus() const { return iServiceList.ManagerStatus(); }
     void Reset(DWORD aServiceType=0) { iServiceType = aServiceType; Clear(); }
 
-    bool         StartService(size_t   anIndex);
-    bool         StopService(size_t    anIndex);
+    bool StartService(size_t anIndex);
+    bool StopService(size_t  anIndex);
+    bool SetServiceStartupType(size_t anIndex, DWORD anStartType);
 
     DWORD GetType()  const { return iServiceType; }
     DWORD GetCount() const { return iServiceList.ServiceCount(); }

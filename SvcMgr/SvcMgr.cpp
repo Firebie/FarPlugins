@@ -40,6 +40,9 @@ DEFINE_GUID(MsgCantStopServiceGuid, 0x75996f83, 0xb676, 0x45e7, 0xa7, 0xe3, 0x67
 // {754C7779-F44A-4789-B21B-FB7CE34DE8C1}
 DEFINE_GUID(CantConnectToMachineMsgGuid, 0x754c7779, 0xf44a, 0x4789, 0xb2, 0x1b, 0xfb, 0x7c, 0xe3, 0x4d, 0xe8, 0xc1);
 
+// {A43D8B59-A5D9-4805-BAA0-D1FBA6974980}
+DEFINE_GUID(MsgCantSetStartTypeGuid, 0xa43d8b59, 0xa5d9, 0x4805, 0xba, 0xa0, 0xd1, 0xfb, 0xa6, 0x97, 0x49, 0x80);
+
 // {F288D1AA-0E26-4A2E-8056-F67D1F0D8B60}
 DEFINE_GUID(SelectComputerGuid, 0xf288d1aa, 0xe26, 0x4a2e, 0x80, 0x56, 0xf6, 0x7d, 0x1f, 0xd, 0x8b, 0x60);
 
@@ -107,6 +110,19 @@ void SaveSettings()
   g_hSettings = INVALID_HANDLE_VALUE;
 }
 
+void RefreshPanel(bool bActvie = true)
+{
+  Info.PanelControl(bActvie ? PANEL_ACTIVE : PANEL_PASSIVE, FCTL_UPDATEPANEL, 1, NULL);
+}
+
+void ShowLastError(const GUID* pGuid)
+{
+  Info.Message(&PluginGuid, pGuid,
+    FMSG_ERRORTYPE|FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK,
+    NULL,
+    (const wchar_t * const *)L"Error",
+    0,0);
+}
 
 void WINAPI SetStartupInfoW(const struct PluginStartupInfo *psi)
 {
@@ -127,13 +143,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *oi)
   CServiceManager* sm = new CServiceManager(g_Settings.sComputer);
   bool bInit = sm->Init();
   if (!bInit)
-  {
-    Info.Message(&PluginGuid, &CantConnectToMachineMsgGuid,
-      FMSG_ERRORTYPE|FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK,
-      NULL,
-      (const wchar_t * const *)L"Error",
-      0,0);
-  }
+    ShowLastError(&CantConnectToMachineMsgGuid);
+
   return (HANDLE)sm;
 }
 
@@ -522,13 +533,13 @@ BOOL EditService(CServiceManager* sm)
           int nStartTypeMessages[] = {MBoot, MSystem, MAutomatic, MManual, MDisabled};
           int* pStartTypeMessages = NULL;
 
-          if (sm->GetType()==SERVICE_WIN32)
+          if (sm->GetType() == SERVICE_WIN32)
           {
             nStartTypeCount = 3;
             nStartType -= 2;
             pStartTypeMessages = nStartTypeMessages + 2;
           }
-          else if (sm->GetType()==SERVICE_DRIVER)
+          else if (sm->GetType() == SERVICE_DRIVER)
           {
             nStartTypeCount = 5;
             pStartTypeMessages = nStartTypeMessages;
@@ -542,7 +553,16 @@ BOOL EditService(CServiceManager* sm)
           Dlg.AddOKCancel(MButtonOk, MButtonCancel);
           if (Dlg.ShowDialog())
           {
-            int a = 10;
+            if (sm->GetType() == SERVICE_WIN32)
+              nStartType += 2;
+
+            if (nStartType != rServiceInfo.iStartType)
+            {
+              if (sm->SetServiceStartupType(Index, nStartType))
+                RefreshPanel();
+              else
+                ShowLastError(&MsgCantSetStartTypeGuid);
+            }
           }
         }
       }
@@ -610,15 +630,9 @@ BOOL StartService(CServiceManager* sm)
         {
           bool bStart = sm->StartService(Index);
           if (bStart)
-            Info.PanelControl(PANEL_ACTIVE, FCTL_REDRAWPANEL, 0, NULL);
+            RefreshPanel();
           else
-          {
-            Info.Message(&PluginGuid, &MsgCantStartServiceGuid,
-              FMSG_ERRORTYPE|FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK,
-              NULL,
-              (const wchar_t * const *)L"Error",
-              0,0);
-          }
+            ShowLastError(&MsgCantStartServiceGuid);
         }
       }
     }
@@ -651,15 +665,9 @@ BOOL StopService(CServiceManager* sm)
         {
           bool bStop = sm->StopService(Index);
           if (bStop)
-            Info.PanelControl(PANEL_ACTIVE, FCTL_REDRAWPANEL, 0, NULL);
+            RefreshPanel();
           else
-          {
-            Info.Message(&PluginGuid, &MsgCantStopServiceGuid,
-              FMSG_ERRORTYPE|FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK,
-              NULL,
-              (const wchar_t * const *)L"Error",
-              0,0);
-          }
+            ShowLastError(&MsgCantStopServiceGuid);
         }
       }
     }

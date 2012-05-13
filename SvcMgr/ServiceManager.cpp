@@ -455,6 +455,38 @@ bool CServiceList::StopService(size_t anIndex)
   return bStop;
 }
 
+bool CServiceList::SetServiceStartupType(size_t anIndex, DWORD anStartType)
+{
+  SServiceInfo SI = (*this)[anIndex];
+
+  SC_HANDLE hService = OpenService(
+    iSCManager,
+    SI.iServiceName,
+    SERVICE_CHANGE_CONFIG);
+
+  if (hService == NULL)
+    return false;
+
+  SERVICE_STATUS ss;
+  BOOL bChange = ::ChangeServiceConfig(
+    hService, 
+    SERVICE_NO_CHANGE,
+    anStartType,
+    SERVICE_NO_CHANGE,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL);
+
+  CloseServiceHandle(hService);
+  hService = NULL;
+
+  return bChange != FALSE;
+}
+
 bool CServiceManager::StartService(size_t anIndex)
 {
   if (anIndex >= GetCount())
@@ -469,4 +501,12 @@ bool CServiceManager::StopService(size_t anIndex)
     return false;
 
   return iServiceList.StopService(anIndex);
+}
+
+bool CServiceManager::SetServiceStartupType(size_t anIndex, DWORD anStartType)
+{
+  if (anIndex >= GetCount())
+    return false;
+
+  return iServiceList.SetServiceStartupType(anIndex, anStartType);
 }
