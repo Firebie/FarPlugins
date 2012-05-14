@@ -12,6 +12,7 @@
 #include <windows.h>
 #include <initguid.h>
 #include <objbase.h>
+#include <assert.h>
 
 #include <plugin.hpp>
 #include <vector>

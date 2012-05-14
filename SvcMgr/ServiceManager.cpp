@@ -487,6 +487,39 @@ bool CServiceList::SetServiceStartupType(size_t anIndex, DWORD anStartType)
   return bChange != FALSE;
 }
 
+bool CServiceList::QueryServiceStatus(size_t anIndex, SERVICE_STATUS_PROCESS& QueryServiceStatus)
+{
+  SServiceInfo SI = (*this)[anIndex];
+
+  SC_HANDLE hService = OpenService(
+    iSCManager,
+    SI.iServiceName,
+    SERVICE_QUERY_STATUS);
+
+  if (hService == NULL)
+    return false;
+
+  DWORD nSizeNeeded = 0;
+  BOOL bQuerySize = QueryServiceStatusEx(hService, SC_STATUS_PROCESS_INFO, NULL, 0, &nSizeNeeded);
+  BOOL bQuery = FALSE;
+  if (!bQuerySize && GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+  {
+    BYTE* pBuf = new BYTE[nSizeNeeded];
+    
+    bQuery = QueryServiceStatusEx(hService, SC_STATUS_PROCESS_INFO, pBuf, nSizeNeeded, &nSizeNeeded);
+    if (bQuery)
+      QueryServiceStatus = *(SERVICE_STATUS_PROCESS*)pBuf;
+
+    delete[] pBuf;
+  }
+
+
+  CloseServiceHandle(hService);
+  hService = NULL;
+
+  return bQuery != FALSE;
+}
+
 bool CServiceManager::StartService(size_t anIndex)
 {
   if (anIndex >= GetCount())
@@ -510,3 +543,12 @@ bool CServiceManager::SetServiceStartupType(size_t anIndex, DWORD anStartType)
 
   return iServiceList.SetServiceStartupType(anIndex, anStartType);
 }
+
+bool CServiceManager::QueryServiceStatus(size_t anIndex, SERVICE_STATUS_PROCESS& QueryServiceStatus)
+{
+  if (anIndex >= GetCount())
+    return false;
+
+  return iServiceList.QueryServiceStatus(anIndex, QueryServiceStatus);
+}
+

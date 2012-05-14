@@ -114,9 +114,14 @@ void SaveSettings()
   g_hSettings = INVALID_HANDLE_VALUE;
 }
 
-void RefreshPanel(bool bActvie = true)
+void UpdatePanel(bool bActvie = true)
 {
   Info.PanelControl(bActvie ? PANEL_ACTIVE : PANEL_PASSIVE, FCTL_UPDATEPANEL, 1, NULL);
+}
+
+void RedrawPanel(bool bActvie = true)
+{
+  Info.PanelControl(bActvie ? PANEL_ACTIVE : PANEL_PASSIVE, FCTL_REDRAWPANEL, 0, NULL);
 }
 
 void ShowLastError(const GUID* pGuid)
@@ -128,47 +133,36 @@ void ShowLastError(const GUID* pGuid)
     0,0);
 }
 
-void WINAPI SetStartupInfoW(const struct PluginStartupInfo *psi)
+void ShowProgressMessage(const GUID* pGuid, const wstring& rMsg)
 {
-  Info     = *psi;
-  FSF      = *psi->FSF;
-  Info.FSF = &FSF;
-
-  ReadSettings();
+  Info.Message(&PluginGuid, pGuid,
+    FMSG_ALLINONE,
+    NULL,
+    (const wchar_t * const *)rMsg.c_str(),
+    0,0);
 }
 
-void WINAPI ExitFARW(const struct ExitInfo *Info)
+static int ShowMessage(const wchar_t* title, const wchar_t* text, const FARMESSAGEFLAGS flags, const wchar_t* buttons = NULL, int buttons_num = 0)
 {
-  SaveSettings();
-}
+  assert(text);
 
-HANDLE WINAPI OpenW(const struct OpenInfo *oi)
-{
-  CServiceManager* sm = new CServiceManager(g_Settings.sComputer);
-  bool bInit = sm->Init();
-  if (!bInit)
-    ShowLastError(&CantConnectToMachineMsgGuid);
+  wstring content;
+  content = title ? title : PluginName;
+  content += L'\n';
+  content += text;
+  if (buttons) {
+    content += L'\n';
+    content += buttons;
+  }
 
-  return (HANDLE)sm;
-}
-
-void WINAPI ClosePanelW(const struct ClosePanelInfo *cpi)
-{
-  SaveSettings();
-  CServiceManager* sm=(CServiceManager*)cpi->hPanel;
-  delete sm;
-}
-
-void WINAPI GetPluginInfoW(struct PluginInfo *pi)
-{
-  static const wchar_t* MenuStrings[1];
-  pi->StructSize=sizeof(PluginInfo);
-  pi->Flags=0;
-  pi->CommandPrefix=PluginPrefix;
-  MenuStrings[0]=PluginName;
-  pi->PluginMenu.Guids=&MenuGuid;
-  pi->PluginMenu.Strings=MenuStrings;
-  pi->PluginMenu.Count=ArraySize(MenuStrings);
+  return Info.Message(
+    &PluginGuid,
+    &PluginGuid,
+    FMSG_ALLINONE | flags,
+    NULL,
+    reinterpret_cast<const wchar_t* const*>(content.c_str()),
+    0,
+    buttons_num);
 }
 
 wstring GetComputerName()
@@ -191,17 +185,64 @@ wstring GetComputerName()
   return sName;
 }
 
+void WINAPI SetStartupInfoW(const struct PluginStartupInfo *psi)
+{
+  Info     = *psi;
+  FSF      = *psi->FSF;
+  Info.FSF = &FSF;
+
+  ReadSettings();
+}
+
+void WINAPI ExitFARW(const struct ExitInfo *Info)
+{
+  SaveSettings();
+}
+
+HANDLE WINAPI OpenW(const struct OpenInfo *oi)
+{
+  CServiceManager* sm = new CServiceManager(g_Settings.sComputer);
+
+  wstring sMsg = L"Connecting to " + (g_Settings.sComputer.length() > 0 ? g_Settings.sComputer : GetComputerName());
+  ShowMessage(NULL, sMsg.c_str(), FMSG_NONE);
+  bool bInit = sm->Init();
+  
+  if (!bInit)
+    ShowLastError(&CantConnectToMachineMsgGuid);
+
+  return (HANDLE)sm;
+}
+
+void WINAPI ClosePanelW(const struct ClosePanelInfo *cpi)
+{
+  SaveSettings();
+  CServiceManager* sm = (CServiceManager*)cpi->hPanel;
+  delete sm;
+}
+
+void WINAPI GetPluginInfoW(struct PluginInfo *pi)
+{
+  static const wchar_t* MenuStrings[1];
+  pi->StructSize=sizeof(PluginInfo);
+  pi->Flags=0;
+  pi->CommandPrefix=PluginPrefix;
+  MenuStrings[0]=PluginName;
+  pi->PluginMenu.Guids=&MenuGuid;
+  pi->PluginMenu.Strings=MenuStrings;
+  pi->PluginMenu.Count=ArraySize(MenuStrings);
+}
+
 void WINAPI GetOpenPanelInfoW(struct OpenPanelInfo *opi)
 {
   static wchar_t PanelTitle[50];
   CServiceManager* sm=(CServiceManager*)opi->hPanel;
   opi->StructSize=sizeof(*opi);
   opi->Flags=OPIF_ADDDOTS|OPIF_SHOWPRESERVECASE|OPIF_SHORTCUT;
-  opi->CurDir=NULL;
+  opi->CurDir = NULL;
   if(sm->GetType()==SERVICE_WIN32)
-    opi->CurDir=ServicesDirName;
+    opi->CurDir = ServicesDirName;
   else if(sm->GetType()==SERVICE_DRIVER)
-    opi->CurDir=DriversDirName;
+    opi->CurDir = DriversDirName;
 
   wstring sComputer;
   if (g_Settings.sComputer.length() > 0)
@@ -563,7 +604,7 @@ BOOL EditService(CServiceManager* sm)
             if (nStartType != rServiceInfo.iStartType)
             {
               if (sm->SetServiceStartupType(Index, nStartType))
-                RefreshPanel();
+                UpdatePanel();
               else
                 ShowLastError(&MsgCantSetStartTypeGuid);
             }
@@ -634,7 +675,27 @@ BOOL StartService(CServiceManager* sm)
         {
           bool bStart = sm->StartService(Index);
           if (bStart)
-            RefreshPanel();
+          {
+            ShowMessage(NULL, L"Starting service...", FMSG_NONE);
+
+            int nWait = 300;
+            while (true)
+            {
+              SERVICE_STATUS_PROCESS QueryServiceStatus;
+              if (sm->QueryServiceStatus(Index, QueryServiceStatus)
+                && QueryServiceStatus.dwCurrentState == SERVICE_RUNNING)
+              {
+                break;
+              }
+              Sleep(100);
+              nWait -= 1;
+              if (!nWait)
+                break;
+            }
+            UpdatePanel(true);
+            RedrawPanel(true);
+            RedrawPanel(false);
+          }
           else
             ShowLastError(&MsgCantStartServiceGuid);
         }
@@ -669,7 +730,27 @@ BOOL StopService(CServiceManager* sm)
         {
           bool bStop = sm->StopService(Index);
           if (bStop)
-            RefreshPanel();
+          {
+            ShowMessage(NULL, L"Stopping service...", FMSG_NONE);
+
+            int nWait = 300;
+            while (true)
+            {
+              SERVICE_STATUS_PROCESS QueryServiceStatus;
+              if (sm->QueryServiceStatus(Index, QueryServiceStatus)
+                && QueryServiceStatus.dwCurrentState == SERVICE_STOPPED)
+              {
+                break;
+              }
+              Sleep(100);
+              nWait -= 1;
+              if (!nWait)
+                break;
+            }
+            UpdatePanel(true);
+            RedrawPanel(true);
+            RedrawPanel(false);
+          }
           else
             ShowLastError(&MsgCantStopServiceGuid);
         }
