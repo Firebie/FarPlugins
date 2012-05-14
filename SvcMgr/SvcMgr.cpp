@@ -20,7 +20,11 @@
 #include "stdafx.h"
 
 #include "ServiceManager.hpp"
+#pragma warning (push)
+#pragma warning (disable: 4100)
+#pragma warning (disable: 4512)
 #include "DlgBuilder.hpp"
+#pragma warning (pop)
 #include "SvcMgrLng.h"
 
 #include "SvcMgr.h"
@@ -69,7 +73,7 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *gi)
   gi->Version       = MAKEFARVERSION(0,1,1,1,VS_RELEASE);
   gi->Guid          = PluginGuid;
   gi->Title         = L"SvcMgr";
-  gi->Description   = L"Service manager plugin";
+  gi->Description   = L"Service manager";
   gi->Author        = L"TeaTeam";
 }
 
@@ -545,10 +549,10 @@ BOOL EditService(CServiceManager* sm)
             pStartTypeMessages = nStartTypeMessages;
           }
           
-          
           Dlg.AddEmptyLine();
-          Dlg.AddText(MStartupType);
+          Dlg.StartSingleBox(MStartupType, true);
           Dlg.AddRadioButtons(&nStartType, nStartTypeCount, pStartTypeMessages, true);
+          Dlg.EndSingleBox();
 
           Dlg.AddOKCancel(MButtonOk, MButtonCancel);
           if (Dlg.ShowDialog())
