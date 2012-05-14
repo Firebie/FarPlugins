@@ -98,6 +98,7 @@ public:
 
   bool StartService(size_t anIndex);
   bool StopService(size_t anIndex);
+  bool PauseService(size_t anIndex);
   bool SetServiceStartupType(size_t anIndex, DWORD anStartType);
   bool QueryServiceStatus(size_t anIndex, SERVICE_STATUS_PROCESS& QueryServiceStatus);
 };
@@ -123,6 +124,7 @@ class CServiceManager
 
     bool StartService(size_t anIndex);
     bool StopService(size_t  anIndex);
+    bool PauseService(size_t anIndex);
     bool SetServiceStartupType(size_t anIndex, DWORD anStartType);
     bool QueryServiceStatus(size_t anIndex, SERVICE_STATUS_PROCESS& QueryServiceStatus);
 

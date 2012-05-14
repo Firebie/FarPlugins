@@ -236,19 +236,15 @@ void WINAPI GetOpenPanelInfoW(struct OpenPanelInfo *opi)
 {
   static wchar_t PanelTitle[50];
   CServiceManager* sm=(CServiceManager*)opi->hPanel;
-  opi->StructSize=sizeof(*opi);
-  opi->Flags=OPIF_ADDDOTS|OPIF_SHOWPRESERVECASE|OPIF_SHORTCUT;
-  opi->CurDir = NULL;
+  opi->StructSize = sizeof(*opi);
+  opi->Flags      = OPIF_ADDDOTS|OPIF_SHOWPRESERVECASE|OPIF_SHORTCUT;
+  opi->CurDir     = NULL;
   if(sm->GetType()==SERVICE_WIN32)
     opi->CurDir = ServicesDirName;
   else if(sm->GetType()==SERVICE_DRIVER)
     opi->CurDir = DriversDirName;
 
-  wstring sComputer;
-  if (g_Settings.sComputer.length() > 0)
-    sComputer = g_Settings.sComputer;
-  else
-    sComputer = GetComputerName();
+  wstring sComputer = g_Settings.sComputer.length() > 0 ? sComputer = g_Settings.sComputer : GetComputerName();
 
   FSF.snprintf(
     PanelTitle,
@@ -270,14 +266,81 @@ void WINAPI GetOpenPanelInfoW(struct OpenPanelInfo *opi)
   }
   else
   {
-    static const wchar_t* ColumnTitles[]={NULL,L"Status",L"Startup"};
+    static const wchar_t* ColumnTitles[] = {NULL,L"Status",L"Startup"};
     PanelModesArray[0].ColumnTypes=L"N,C0,C1";
     PanelModesArray[0].ColumnWidths=L"0,8,8";
     PanelModesArray[0].StatusColumnTypes=L"N";
     PanelModesArray[0].StatusColumnWidths=L"0";
     PanelModesArray[0].ColumnTitles=ColumnTitles;
   }
-  opi->StartPanelMode=L'0';
+  opi->StartPanelMode = L'0';
+
+  static vector<KeyBarLabel> vKeyBars;
+  vKeyBars.clear();
+
+  KeyBarLabel kbl;
+  kbl.Text = kbl.LongText = L"Help";
+  kbl.Key.VirtualKeyCode = VK_F1;
+  kbl.Key.ControlKeyState = 0;
+  vKeyBars.push_back(kbl);
+
+  kbl.Text = kbl.LongText = L"";
+  kbl.Key.VirtualKeyCode = VK_F2;
+  kbl.Key.ControlKeyState = 0;
+  vKeyBars.push_back(kbl);
+
+  kbl.Text = kbl.LongText = L"View";
+  kbl.Key.VirtualKeyCode = VK_F3;
+  kbl.Key.ControlKeyState = 0;
+  vKeyBars.push_back(kbl);
+
+  kbl.Text = kbl.LongText = L"Edit";
+  kbl.Key.VirtualKeyCode = VK_F4;
+  kbl.Key.ControlKeyState = 0;
+  vKeyBars.push_back(kbl);
+
+  kbl.Text = kbl.LongText = L"Start";
+  kbl.Key.VirtualKeyCode = VK_F5;
+  kbl.Key.ControlKeyState = 0;
+  vKeyBars.push_back(kbl);
+
+  kbl.Text = kbl.LongText = L"Comp";
+  kbl.Key.VirtualKeyCode = VK_F6;
+  kbl.Key.ControlKeyState = 0;
+  vKeyBars.push_back(kbl);
+
+  kbl.Text = kbl.LongText = L"Pause";
+  kbl.Key.VirtualKeyCode = VK_F7;
+  kbl.Key.ControlKeyState = 0;
+  vKeyBars.push_back(kbl);
+
+  kbl.Text = kbl.LongText = L"Stop";
+  kbl.Key.VirtualKeyCode = VK_F8;
+  kbl.Key.ControlKeyState = 0;
+  vKeyBars.push_back(kbl);
+
+  for (WORD i = VK_F1; i <= VK_F9; ++i) 
+  {
+    kbl.Text = kbl.LongText = L"";
+    kbl.Key.VirtualKeyCode = i;
+    kbl.Key.ControlKeyState = LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED;
+    vKeyBars.push_back(kbl);
+
+    kbl.Text = kbl.LongText = L"";
+    kbl.Key.VirtualKeyCode = i;
+    kbl.Key.ControlKeyState = RIGHT_ALT_PRESSED | LEFT_ALT_PRESSED;
+    vKeyBars.push_back(kbl);
+
+    kbl.Text = kbl.LongText = L"";
+    kbl.Key.VirtualKeyCode = i;
+    kbl.Key.ControlKeyState = SHIFT_PRESSED;
+    vKeyBars.push_back(kbl);
+  }
+
+  static KeyBarTitles kb;
+  kb.Labels = const_cast<KeyBarLabel*>(&vKeyBars.front());
+  kb.CountLabels = vKeyBars.size();
+  opi->KeyBar = &kb;
 }
 
 int WINAPI GetFindDataW(struct GetFindDataInfo *gfdi)
@@ -706,6 +769,61 @@ BOOL StartService(CServiceManager* sm)
   return TRUE;
 }
 
+BOOL PauseService(CServiceManager* sm)
+{
+  PanelInfo pi;
+  ZeroMemory(&pi, sizeof(PanelInfo));
+  pi.StructSize = sizeof(PanelInfo);
+  if (Info.PanelControl(PANEL_ACTIVE, FCTL_GETPANELINFO, 0, &pi))
+  {
+    size_t CurItem = pi.CurrentItem;
+    if (CurItem > 0)
+    {
+      size_t Size = Info.PanelControl(PANEL_ACTIVE,FCTL_GETPANELITEM, CurItem, 0);
+      PluginPanelItem *PPI=(PluginPanelItem*)malloc(Size);
+      if (PPI)
+      {
+        FarGetPluginPanelItem FGPPI = {Size, PPI};
+        Info.PanelControl(PANEL_ACTIVE, FCTL_GETPANELITEM, CurItem, &FGPPI);
+
+        size_t Index = FGPPI.Item->UserData;
+        free(PPI);
+
+        if (Index < sm->GetCount())
+        {
+          bool bStop = sm->PauseService(Index);
+          if (bStop)
+          {
+            ShowMessage(NULL, L"Pausing service...", FMSG_NONE);
+
+            int nWait = 300;
+            while (true)
+            {
+              SERVICE_STATUS_PROCESS QueryServiceStatus;
+              if (sm->QueryServiceStatus(Index, QueryServiceStatus)
+                && QueryServiceStatus.dwCurrentState == SERVICE_PAUSED)
+              {
+                break;
+              }
+              Sleep(100);
+              nWait -= 1;
+              if (!nWait)
+                break;
+            }
+            UpdatePanel(true);
+            RedrawPanel(true);
+            RedrawPanel(false);
+          }
+          else
+            ShowLastError(&MsgCantStopServiceGuid);
+        }
+      }
+    }
+  }
+
+  return TRUE;
+}
+
 BOOL StopService(CServiceManager* sm)
 {
   PanelInfo pi;
@@ -771,15 +889,17 @@ int WINAPI ProcessPanelInputW(const struct ProcessPanelInputInfo *info)
 
   CServiceManager* sm = (CServiceManager*)info->hPanel;
 
-  if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F3)
+  if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F3 && info->Rec.Event.KeyEvent.dwControlKeyState == 0)
     return ViewServiceInfo(sm);
-  if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F4)
+  if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F4 && info->Rec.Event.KeyEvent.dwControlKeyState == 0)
     return EditService(sm);
-  else if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F5)
+  else if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F5 && info->Rec.Event.KeyEvent.dwControlKeyState == 0)
     return StartService(sm);
-  else if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F6)
+  else if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F6 && info->Rec.Event.KeyEvent.dwControlKeyState == 0)
     return SelectComputer(sm);
-  else if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F8)
+  else if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F7 && info->Rec.Event.KeyEvent.dwControlKeyState == 0)
+    return PauseService(sm);
+  else if (info->Rec.Event.KeyEvent.wVirtualKeyCode == VK_F8 && info->Rec.Event.KeyEvent.dwControlKeyState == 0)
     return StopService(sm);
 
   return FALSE;
