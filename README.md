@@ -1,2 +1,3 @@
 FarPlugins
 ==========
+SvcMgr - Service manager
