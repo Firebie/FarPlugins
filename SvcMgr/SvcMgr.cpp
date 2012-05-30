@@ -451,23 +451,24 @@ int WINAPI SetDirectoryW(const struct SetDirectoryInfo *sdi)
 
   CServiceManager* sm = (CServiceManager*)sdi->hPanel;
 
-  if (!wcscmp(sdi->Dir,L"\\") || !wcscmp(sdi->Dir,L".."))
-  {
-    sm->Reset();
-  }
-  else if (!wcscmp(sdi->Dir,ServicesDirName))
-  {
-    sm->Reset(SERVICE_WIN32);
-  }
-  else if (!wcscmp(sdi->Dir,DriversDirName))
-  {
-    sm->Reset(SERVICE_DRIVER);
-  }
-  else
-  {
-    return FALSE;
-  }
+  DWORD nServiceType = 0;
 
+  if (!wcscmp(sdi->Dir,L"\\") || !wcscmp(sdi->Dir,L".."))
+    nServiceType = 0;
+  else if (!wcscmp(sdi->Dir,ServicesDirName))
+    nServiceType = SERVICE_WIN32;
+  else if (!wcscmp(sdi->Dir,DriversDirName))
+    nServiceType = SERVICE_DRIVER;
+  else
+    return FALSE;
+
+  wstring sMsg = L"Connecting to " + (g_Settings.sComputer.length() > 0 ? g_Settings.sComputer : GetComputerName());
+  ShowMessage(NULL, sMsg.c_str(), FMSG_NONE);
+  
+  sm->Reset(nServiceType);
+  
+  RedrawPanel(false);
+  
   return TRUE;
 }
 
