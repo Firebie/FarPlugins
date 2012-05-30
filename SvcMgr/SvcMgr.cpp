@@ -244,7 +244,7 @@ void WINAPI GetOpenPanelInfoW(struct OpenPanelInfo *opi)
   else if(sm->GetType()==SERVICE_DRIVER)
     opi->CurDir = DriversDirName;
 
-  wstring sComputer = g_Settings.sComputer.length() > 0 ? sComputer = g_Settings.sComputer : GetComputerName();
+  wstring sComputer = g_Settings.sComputer.length() > 0 ? g_Settings.sComputer : GetComputerName();
 
   FSF.snprintf(
     PanelTitle,
@@ -467,8 +467,9 @@ int WINAPI SetDirectoryW(const struct SetDirectoryInfo *sdi)
   
   sm->Reset(nServiceType);
   
+  RedrawPanel(true);
   RedrawPanel(false);
-  
+
   return TRUE;
 }
 
