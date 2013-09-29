@@ -1,0 +1,6 @@
+LIBRARY  DlgSelectEx
+EXPORTS
+  GetGlobalInfoW
+  SetStartupInfoW
+  GetPluginInfoW
+  ProcessDialogEventW
