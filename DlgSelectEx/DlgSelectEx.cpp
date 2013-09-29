@@ -4,7 +4,8 @@
 #include "guid.hpp"
 #include "version.hpp"
 
-static struct PluginStartupInfo Info;
+static PluginStartupInfo    Info;
+static FARSTANDARDFUNCTIONS FSF;
 
 void WINAPI GetGlobalInfoW(struct GlobalInfo *Info)
 {
@@ -19,7 +20,9 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *Info)
 
 void WINAPI SetStartupInfoW(const struct PluginStartupInfo *psi)
 {
-  Info=*psi;
+  Info     = *psi;
+  FSF      = *psi->FSF;
+  Info.FSF = &FSF;
 }
 
 void WINAPI GetPluginInfoW(struct PluginInfo *Info)
@@ -38,8 +41,9 @@ size_t GetTextLen(HANDLE hDlg, intptr_t Id)
     ID.PtrLength = nLen + 1;
     ID.PtrData   = new wchar_t[nLen + 1];
     Info.SendDlgMessage(hDlg, DM_GETTEXT, Id, &ID);
-    wchar_t* str = Info.FSF->Trim(ID.PtrData);
-    nLen = wcslen(str);
+    wchar_t* str = ID.PtrData;
+    str[nLen] = 0;
+    nLen = wcslen(Info.FSF->Trim(str));
 
     delete[] ID.PtrData;
   }
